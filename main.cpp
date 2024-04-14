@@ -1,6 +1,10 @@
 #include <iostream>
 #include <algorithm>
 
+/*
+g++ -std=c++11 -o reversi main.cpp
+*/
+
 #define BOARD_SIZE 8
 
 using namespace std;
@@ -8,7 +12,8 @@ using namespace std;
 enum Status {
     white,
     black,
-    space
+    space,
+    puttable,
 };
 
 typedef struct Pos {
@@ -111,10 +116,11 @@ void put(Pos pos, Status piece)
     board[pos.x][pos.y] = piece;
 }
 
+string put_prompt = "Please input a position(ex: 0 3):";
 bool input()
 {
     cout << "You are " << (player == black ? "black" : "white") << endl;
-    cout << "Please input a position(ex: 0 3):" << endl;
+    cout << put_prompt << endl;
     Pos pos;
     cin >> pos.x >> pos.y;
 
@@ -123,8 +129,11 @@ bool input()
 
     while (!checkCanPut(pos, player)) {
         cout << "can't put!" << endl;
+        cout << put_prompt << endl;
         cin >> pos.x >> pos.y;
     }
+
+    cout << "put at " << pos.x << " " << pos.y << endl;
 
     put(pos, player);
 
@@ -149,12 +158,24 @@ bool isGameOver()
 
 void display()
 {
+    cout << "= display board =" << endl;
+
+    // find all puttable
+    Status display_board[BOARD_SIZE][BOARD_SIZE];
+    for (int y = 0; y < BOARD_SIZE; y++) {
+        for (int x = 0; x < BOARD_SIZE; x++)
+            display_board[x][y] = checkCanPut({ x, y }, player) ? puttable : board[x][y];
+    }
+    
     cout << " 01234567" << endl;
     for (int y = 0; y < BOARD_SIZE; y++) {
         cout << y;
         for (int x = 0; x < BOARD_SIZE; x++)
-            cout << (board[x][y] == space ? " " : board[x][y] == black ? "○" : "●");
-//□
+            // NOTE: we assume terminal is black background, so ○ is black
+            if (display_board[x][y] == puttable)
+                cout << "·";
+            else
+                cout << (board[x][y] == space ? " " : board[x][y] == black ? "○" : "●");
         cout << endl;
     }
 }
@@ -169,8 +190,6 @@ int main()
     // loop
     display();
     while (input()) {
-
-        display();
         if (isGameOver()) {
             cout << "gameover" << endl;
             break;
@@ -181,8 +200,13 @@ int main()
             cout << "pass" << endl;
             player = player == white ? black : white;
         }
+
+        display();
+
         // computer()
     }
+
+    display();
 
     // count
     int whiteCount = 0, blackCount = 0;
@@ -203,4 +227,6 @@ int main()
         cout << "black win" << endl;
     else
         cout << "nobody win" << endl;
+    cout << "white:" << whiteCount << endl;
+    cout << "black:" << blackCount << endl;
 }
