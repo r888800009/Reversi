@@ -20,14 +20,13 @@ typedef struct Pos {
     int x, y;
 } Pos;
 
-Status board[BOARD_SIZE][BOARD_SIZE];
-Status player = black;
+typedef enum Status BoardArray[BOARD_SIZE][BOARD_SIZE];
 
-bool isPieceStatus(Pos pos, Status piece)
+bool isPieceStatus(Pos pos, Status piece, BoardArray *board)
 {
     if (0 <= pos.x && pos.x < BOARD_SIZE &&
         0 <= pos.y && pos.y < BOARD_SIZE)
-        return board[pos.x][pos.y] == piece;
+        return (*board)[pos.x][pos.y] == piece;
 
     return false;
 }
@@ -43,10 +42,10 @@ Pos direction[8] = {
     {0, 1},
 };
 
-bool checkCanPut(Pos pos, Status piece)
+bool checkCanPut(Pos pos, Status piece, BoardArray *board)
 {
     // not empty
-    if (board[pos.x][pos.y] != space)
+    if ((*board)[pos.x][pos.y] != space)
         return false;
 
 
@@ -59,7 +58,7 @@ bool checkCanPut(Pos pos, Status piece)
         // must at least one opponent piece
         Pos checkPos = {pos.x + direction[i].x, pos.y + direction[i].y};
 
-        if (!isPieceStatus(checkPos, opponent))
+        if (!isPieceStatus(checkPos, opponent, board))
             continue;
 
         // must at least one self piece at direction
@@ -67,10 +66,10 @@ bool checkCanPut(Pos pos, Status piece)
             Pos checkPos = {pos.x + length * direction[i].x,
                 pos.y + length * direction[i].y};
 
-            if (isPieceStatus(checkPos, space))
+            if (isPieceStatus(checkPos, space, board))
                 break;
 
-            if (isPieceStatus(checkPos, piece))
+            if (isPieceStatus(checkPos, piece, board))
                 found = true;
         }
     }
@@ -81,7 +80,7 @@ bool checkCanPut(Pos pos, Status piece)
     return true;
 }
 
-void put(Pos pos, Status piece)
+void put(Pos pos, Status piece, BoardArray *board)
 {
     // reverse
     // must at least one self piece at direction
@@ -91,10 +90,10 @@ void put(Pos pos, Status piece)
             Pos checkPos = {pos.x + length * direction[i].x,
                 pos.y + length * direction[i].y};
 
-            if (isPieceStatus(checkPos, space))
+            if (isPieceStatus(checkPos, space, board))
                 break;
 
-            if (isPieceStatus(checkPos, piece)) {
+            if (isPieceStatus(checkPos, piece, board)) {
                 foundLength = length;
                 break;
             }
@@ -107,17 +106,17 @@ void put(Pos pos, Status piece)
                     pos.y + length * direction[i].y};
 
                 // set status
-                board[revPos.x][revPos.y] = piece;
+                (*board)[revPos.x][revPos.y] = piece;
             }
         }
     }
 
     // set status
-    board[pos.x][pos.y] = piece;
+    (*board)[pos.x][pos.y] = piece;
 }
 
 string put_prompt = "Please input a position(ex: 0 3):";
-bool input()
+bool input(Status player, BoardArray *board)
 {
     cout << "You are " << (player == black ? "black" : "white") << endl;
     cout << put_prompt << endl;
@@ -127,7 +126,7 @@ bool input()
     if (!cin)
         return false;
 
-    while (!checkCanPut(pos, player)) {
+    while (!checkCanPut(pos, player, board)) {
         cout << "can't put!" << endl;
         cout << put_prompt << endl;
         cin >> pos.x >> pos.y;
@@ -135,38 +134,43 @@ bool input()
 
     cout << "put at " << pos.x << " " << pos.y << endl;
 
-    put(pos, player);
+    put(pos, player, board);
 
     return true;
 }
 
-bool isPass(Status piece)
+bool isPass(Status piece, BoardArray *board)
 {
     for (int y = 0; y < BOARD_SIZE; y++) {
         for (int x = 0; x < BOARD_SIZE; x++)
-            if (checkCanPut({ x, y }, piece))
+            if (checkCanPut({ x, y }, piece, board))
                 return false;
     }
 
     return true;
 }
 
-bool isGameOver()
+bool isGameOver(BoardArray *board)
 {
-    return isPass(white) && isPass(black);
+    return isPass(white, board) && isPass(black, board);
 }
 
-void display()
+void find_puttable(BoardArray *src, BoardArray *dst, Status player)
+{
+    for (int y = 0; y < BOARD_SIZE; y++) {
+        for (int x = 0; x < BOARD_SIZE; x++)
+            (*dst)[x][y] = checkCanPut({ x, y }, player, src) ? puttable : (*src)[x][y];
+    }
+}
+
+void display(BoardArray *show_board, Status player)
 {
     cout << "= display board =" << endl;
 
     // find all puttable
     Status display_board[BOARD_SIZE][BOARD_SIZE];
-    for (int y = 0; y < BOARD_SIZE; y++) {
-        for (int x = 0; x < BOARD_SIZE; x++)
-            display_board[x][y] = checkCanPut({ x, y }, player) ? puttable : board[x][y];
-    }
-    
+    find_puttable(show_board, &display_board, player);
+
     cout << " 01234567" << endl;
     for (int y = 0; y < BOARD_SIZE; y++) {
         cout << y;
@@ -175,50 +179,60 @@ void display()
             if (display_board[x][y] == puttable)
                 cout << "·";
             else
-                cout << (board[x][y] == space ? " " : board[x][y] == black ? "○" : "●");
+                cout << ((*show_board)[x][y] == space ? " " : (*show_board)[x][y] == black ? "○" : "●");
         cout << endl;
+    }
+}
+
+void count_game(BoardArray *board, int *whiteCount, int *blackCount)
+{
+    for (int y = 0; y < BOARD_SIZE; y++) {
+        for (int x = 0; x < BOARD_SIZE; x++) {
+            if ((*board)[x][y] == space)
+                continue;
+            
+            if ((*board)[x][y] == white)
+                *whiteCount += 1;
+            else
+                *blackCount += 1;
+        }       
     }
 }
 
 int main()
 {
+    BoardArray board;
+    Status player = black;
+    
     // initialztion
     fill(&board[0][0], &board[0][0] + BOARD_SIZE * BOARD_SIZE, space);
     board[3][3] = board[4][4] = white;
     board[4][3] = board[3][4] = black;
 
     // loop
-    display();
-    while (input()) {
-        if (isGameOver()) {
+    display(&board, player);
+    while (input(player, &board)) {
+        if (isGameOver(&board)) {
             cout << "gameover" << endl;
             break;
         }
 
         player = player == white ? black : white;
-        if (isPass(player)) {
+        if (isPass(player, &board)) {
             cout << "pass" << endl;
             player = player == white ? black : white;
         }
 
-        display();
+        display(&board, player);
 
         // computer()
     }
 
-    display();
+    display(&board, player);
 
     // count
     int whiteCount = 0, blackCount = 0;
-     for (int y = 0; y < BOARD_SIZE; y++) {
-        for (int x = 0; x < BOARD_SIZE; x++)
-            if (board[x][y] != space) {
-                if (board[x][y] == white)
-                    whiteCount++;
-                else
-                    blackCount++;
-            }
-    }
+    count_game(&board, &whiteCount, &blackCount);
 
     // who win
     if (whiteCount > blackCount)
