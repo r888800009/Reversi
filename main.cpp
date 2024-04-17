@@ -42,6 +42,8 @@ Pos direction[8] = {
     {0, 1},
 };
 
+void count_game(BoardArray *board, int *whiteCount, int *blackCount);
+
 bool checkCanPut(Pos pos, Status piece, BoardArray *board)
 {
     // not empty
@@ -151,8 +153,12 @@ bool isPass(Status piece, BoardArray *board)
 }
 
 bool isGameOver(BoardArray *board)
-{
-    return isPass(white, board) && isPass(black, board);
+{   
+    bool all_player_pass = isPass(white, board) && isPass(black, board);
+    int whiteCount = 0, blackCount = 0;
+    count_game(board, &whiteCount, &blackCount);
+    bool no_stone = whiteCount == 0 || blackCount == 0;
+    return all_player_pass || no_stone;
 }
 
 void find_puttable(BoardArray *src, BoardArray *dst, Status player)
@@ -199,10 +205,51 @@ void count_game(BoardArray *board, int *whiteCount, int *blackCount)
     }
 }
 
+void find_best_puttable(BoardArray *board, Pos *putPos, Status bot_player)
+{
+    int maxCount = 0;
+    for (int y = 0; y < BOARD_SIZE; y++) {
+        for (int x = 0; x < BOARD_SIZE; x++) {
+            if (!checkCanPut({ x, y }, bot_player, board))
+                continue;
+
+            BoardArray tmp_board;
+            copy(&(*board)[0][0], &(*board)[0][0] + BOARD_SIZE * BOARD_SIZE, &tmp_board[0][0]);
+            put({ x, y }, bot_player, &tmp_board);
+
+            int whiteCount = 0, blackCount = 0;
+            count_game(&tmp_board, &whiteCount, &blackCount);
+
+            int count = bot_player == white ? whiteCount : blackCount;
+            if (count > maxCount) {
+                maxCount = count;
+                putPos->x = x;
+                putPos->y = y;
+            }
+
+            // reset
+            copy(&(*board)[0][0], &(*board)[0][0] + BOARD_SIZE * BOARD_SIZE, &tmp_board[0][0]);
+        }
+    }
+}
+
+void computer(BoardArray *board, Status bot_player)
+{
+    Pos putPos = {0, 0};
+
+    find_best_puttable(board, &putPos, bot_player);
+
+    if (!checkCanPut(putPos, bot_player, board))
+        abort();
+    
+    put(putPos, bot_player, board);
+}
+
 int main()
 {
     BoardArray board;
-    Status player = black;
+    Status current_player = black;
+    Status input_player = black;
     
     // initialztion
     fill(&board[0][0], &board[0][0] + BOARD_SIZE * BOARD_SIZE, space);
@@ -210,25 +257,26 @@ int main()
     board[4][3] = board[3][4] = black;
 
     // loop
-    display(&board, player);
-    while (input(player, &board)) {
-        if (isGameOver(&board)) {
-            cout << "gameover" << endl;
-            break;
+    display(&board, current_player);
+    while (!isGameOver(&board)) {
+        if (current_player == input_player) {
+            while(!input(current_player, &board))
+                ;
+        } else {
+            cout << "computer" << endl;
+            computer(&board, current_player);
         }
 
-        player = player == white ? black : white;
-        if (isPass(player, &board)) {
+        current_player = current_player == white ? black : white;
+        if (isPass(current_player, &board)) {
             cout << "pass" << endl;
-            player = player == white ? black : white;
+            current_player = current_player == white ? black : white;
         }
 
-        display(&board, player);
-
-        // computer()
+        display(&board, current_player);
     }
 
-    display(&board, player);
+    cout << "gameover" << endl;
 
     // count
     int whiteCount = 0, blackCount = 0;
