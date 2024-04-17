@@ -50,7 +50,6 @@ bool checkCanPut(Pos pos, Status piece, BoardArray *board)
     if ((*board)[pos.x][pos.y] != space)
         return false;
 
-
     Status opponent = piece == white ? black : white;
     bool found = false;
     for (int i = 0; i < 8; i++) {
@@ -205,47 +204,94 @@ void count_game(BoardArray *board, int *whiteCount, int *blackCount)
     }
 }
 
-void find_best_puttable(BoardArray *board, Pos *putPos, Status bot_player)
+Status swap_player(Status player)
 {
-    int maxCount = 0;
+    return player == white ? black : white;
+}
+
+typedef struct AlphaBeta {
+    int alpha = -8*8*2;
+    int beta = 8*8*2; // 8*8 is max count
+} AlphaBeta;
+
+int find_best_puttable(BoardArray *board, Pos *putPos, Status current_player, int alpha, int beta, int depth)
+{
+    /*
+    this function using alpha-beta pruning and greedy algorithm to find best move
+    */
+
+    AlphaBeta alphaBeta;
+    alphaBeta.alpha = alpha;
+    alphaBeta.beta = beta;
+
+    if (isGameOver(board) || depth == 0) {
+        int whiteCount = 0, blackCount = 0;
+        // whiteCount > 0, blackCount > 0
+        count_game(board, &whiteCount, &blackCount);
+        return whiteCount - blackCount;
+    }
+
+    Pos bestPos = {0, 0};
     for (int y = 0; y < BOARD_SIZE; y++) {
         for (int x = 0; x < BOARD_SIZE; x++) {
-            if (!checkCanPut({ x, y }, bot_player, board))
+            if (!checkCanPut({ x, y }, current_player, board))
                 continue;
 
             BoardArray tmp_board;
             copy(&(*board)[0][0], &(*board)[0][0] + BOARD_SIZE * BOARD_SIZE, &tmp_board[0][0]);
-            put({ x, y }, bot_player, &tmp_board);
+            put({ x, y }, current_player, &tmp_board);
 
-            int whiteCount = 0, blackCount = 0;
-            count_game(&tmp_board, &whiteCount, &blackCount);
-
-            int count = bot_player == white ? whiteCount : blackCount;
-            if (count > maxCount) {
-                maxCount = count;
-                putPos->x = x;
-                putPos->y = y;
+            // recursive
+            int bestValue = find_best_puttable(&tmp_board, putPos, swap_player(current_player), alphaBeta.alpha, alphaBeta.beta, depth - 1);
+            //cout << "x:" << x << " y:" << y << " alpha:" << alpha << " beta:" << beta << endl;
+            
+            // alpha-beta pruning
+            if (current_player == white) {
+                if (bestValue > alphaBeta.alpha) {
+                    alphaBeta.alpha = bestValue;
+                    bestPos = { x, y };
+                }
+            } else {
+                if (bestValue < alphaBeta.beta) {
+                    alphaBeta.beta = bestValue;
+                    bestPos = { x, y };
+                }
             }
 
-            // reset
-            copy(&(*board)[0][0], &(*board)[0][0] + BOARD_SIZE * BOARD_SIZE, &tmp_board[0][0]);
+            // alpha-beta pruning
+            if (alphaBeta.alpha >= alphaBeta.beta) {
+                putPos->x = bestPos.x;
+                putPos->y = bestPos.y;
+                //cout << "pruning" << endl;
+                if (current_player == white)
+                    return alphaBeta.alpha;
+                else
+                    return alphaBeta.beta;
+            }
         }
     }
+    
+    putPos->x = bestPos.x;
+    putPos->y = bestPos.y;
+    if (current_player == white)
+        return alphaBeta.alpha;
+    else
+        return alphaBeta.beta;
 }
 
-void computer(BoardArray *board, Status bot_player)
+void computer(BoardArray *board, Status bot_player, int depth)
 {
     Pos putPos = {0, 0};
 
-    find_best_puttable(board, &putPos, bot_player);
-
+    find_best_puttable(board, &putPos, bot_player, -8*8*2, 8*8*2, depth);
+    cout << "put at " << putPos.x << " " << putPos.y << endl;
     if (!checkCanPut(putPos, bot_player, board))
         abort();
     
     put(putPos, bot_player, board);
 }
 
-int main()
+int main(const int argc, const char *argv[])
 {
     BoardArray board;
     Status current_player = black;
@@ -264,13 +310,13 @@ int main()
                 ;
         } else {
             cout << "computer" << endl;
-            computer(&board, current_player);
+            computer(&board, current_player, 8);
         }
 
-        current_player = current_player == white ? black : white;
+        current_player = swap_player(current_player);
         if (isPass(current_player, &board)) {
             cout << "pass" << endl;
-            current_player = current_player == white ? black : white;
+            current_player = swap_player(current_player);
         }
 
         display(&board, current_player);
