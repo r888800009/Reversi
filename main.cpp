@@ -168,7 +168,7 @@ void display(BoardArray *show_board, Status player)
     cout << "= display board =" << endl;
 
     // find all puttable
-    Status display_board[BOARD_SIZE][BOARD_SIZE];
+    BoardArray display_board;
     find_puttable(show_board, &display_board, player);
 
     cout << " 01234567" << endl;
