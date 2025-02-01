@@ -117,14 +117,18 @@ void put(Pos pos, Status piece, BoardArray *board)
 }
 
 string put_prompt = "Please input a position(ex: 0 3):";
-bool input(Status player, BoardArray *board)
-{
+bool input_parse(Status player, Pos &pos) {
     cout << "You are " << (player == black ? "black" : "white") << endl;
     cout << put_prompt << endl;
-    Pos pos;
-    cin >> pos.x >> pos.y;
+    cin >> skipws >> pos.x >> pos.y;
 
-    if (!cin)
+    return (bool) cin;
+}
+
+bool input(Status player, BoardArray *board)
+{
+    Pos pos;
+    if (!input_parse(player, pos))
         return false;
 
     while (!checkCanPut(pos, player, board)) {
@@ -279,19 +283,54 @@ int find_best_puttable(BoardArray *board, Pos *putPos, Status current_player, in
         return alphaBeta.beta;
 }
 
+void print_pos(Pos *pos)
+{
+    cout << "put at " << pos->x << " " << pos->y << endl;
+}
+
+bool computer_find_put(BoardArray *board, Status bot_player, int depth, Pos *putPos)
+{
+    find_best_puttable(board, putPos, bot_player, -8*8*2, 8*8*2, depth);
+    print_pos(putPos);
+    if (!checkCanPut(*putPos, bot_player, board)) {
+        abort();
+        //return false;
+    }
+
+    return true;
+}
+
 void computer(BoardArray *board, Status bot_player, int depth)
 {
     Pos putPos = {0, 0};
-
-    find_best_puttable(board, &putPos, bot_player, -8*8*2, 8*8*2, depth);
-    cout << "put at " << putPos.x << " " << putPos.y << endl;
-    if (!checkCanPut(putPos, bot_player, board))
-        abort();
-    
+    computer_find_put(board, bot_player, depth, &putPos);
     put(putPos, bot_player, board);
 }
 
-int main(const int argc, const char *argv[])
+void print_win(int whiteCount, int blackCount)
+{
+    cout << "gameover" << endl;
+    if (whiteCount > blackCount)
+        cout << "white win" << endl;
+    else if (whiteCount < blackCount)
+        cout << "black win" << endl;
+    else
+        cout << "nobody win" << endl;
+    cout << "white:" << whiteCount << endl;
+    cout << "black:" << blackCount << endl;
+}
+
+void print_result(BoardArray &board)
+{
+    // count
+    int whiteCount = 0, blackCount = 0;
+    count_game(&board, &whiteCount, &blackCount);
+
+    // who win
+    print_win(whiteCount, blackCount);
+}
+
+void play()
 {
     BoardArray board;
     Status current_player = black;
@@ -322,19 +361,116 @@ int main(const int argc, const char *argv[])
         display(&board, current_player);
     }
 
-    cout << "gameover" << endl;
+    print_result(board);
+}
 
-    // count
-    int whiteCount = 0, blackCount = 0;
-    count_game(&board, &whiteCount, &blackCount);
+void parse_board(BoardArray &board_array)
+{
+    char board[8][8];
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            cin >> std::noskipws >> board[x][y];
+            while (board[x][y] == '\n' || board[x][y] == '\r')
+                cin >> std::noskipws >> board[x][y];
+        }
+    }
 
-    // who win
-    if (whiteCount > blackCount)
-        cout << "white win" << endl;
-    else if (whiteCount < blackCount)
-        cout << "black win" << endl;
-    else
-        cout << "nobody win" << endl;
-    cout << "white:" << whiteCount << endl;
-    cout << "black:" << blackCount << endl;
+    // convert to BoardArray
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            if (board[x][y] == 'W')
+                board_array[x][y] = white;
+            else if (board[x][y] == 'B')
+                board_array[x][y] = black;
+            else
+                board_array[x][y] = space;
+        }
+    }
+}
+
+void bot_put(Status current_player, BoardArray &board_array) {
+    display(&board_array, current_player);
+    Pos putPos = {0, 0};
+    computer_find_put(&board_array, current_player, 4, &putPos);
+    put(putPos, current_player, &board_array);
+    display(&board_array, current_player);
+
+    print_pos(&putPos);
+}
+
+void print_help()
+{
+    /*
+    ./a.out parse [white|black]
+    ./a.out play [white|black]
+    */
+    cout << "usage: ./a.out parse [white|black]" << endl;
+    cout << "\t" << "input board and ai choice" << endl;
+    cout << "usage: ./a.out play [white|black]" << endl;
+    cout << "usage: ./a.out check [white|black]" << endl;
+    cout << "\t" << "input board and user choice" << endl;
+}
+
+bool parse_current_player(Status &current_player, const char *argv[]) {
+    if (string(argv[2]) == "white") {
+        current_player = white;
+        return true;
+    } else if (string(argv[2]) == "black") {
+        current_player = black;
+        return true;
+    }
+    return false;
+}
+
+int main(const int argc, const char *argv[])
+{
+    if (argc < 2) {
+        print_help();
+        return 1;
+    }
+
+    if (string(argv[1]) == "parse" && argc == 3) {
+        Status current_player;
+        if (!parse_current_player(current_player, argv)) {
+            print_help();
+            return 1;
+        }
+
+        BoardArray current_board;
+        parse_board(current_board);
+        if (isGameOver(&current_board))
+            print_result(current_board);
+        else if (isPass(current_player, &current_board))
+            cout << "pass" << endl;
+        else
+            bot_put(current_player, current_board);
+    } else if (string(argv[1]) == "play" && argc == 3) {
+        cout << "current not support player select" << endl;
+        play();
+    } else if (string(argv[1]) == "check" && argc == 3) {
+        Status current_player;
+        if (!parse_current_player(current_player, argv)) {
+            print_help();
+            return 1;
+        }
+
+        BoardArray current_board;
+        parse_board(current_board);
+        if (isGameOver(&current_board))
+            print_result(current_board);
+        else if (isPass(current_player, &current_board))
+            cout << "pass" << endl;
+        else {
+            Pos pos;
+            input_parse(current_player, pos);
+            if (checkCanPut(pos, current_player, &current_board))
+                cout << "can put" << endl;
+            else
+                cout << "can't put" << endl;
+        }
+    } else {
+        print_help();
+        return 1;
+    }
+
 }
