@@ -393,7 +393,7 @@ void bot_put(Status current_player, BoardArray &board_array) {
     Pos putPos = {0, 0};
     computer_find_put(&board_array, current_player, 4, &putPos);
     put(putPos, current_player, &board_array);
-    display(&board_array, current_player);
+    display(&board_array, swap_player(current_player));
 
     print_pos(&putPos);
 }
@@ -409,6 +409,8 @@ void print_help()
     cout << "usage: ./a.out play [white|black]" << endl;
     cout << "usage: ./a.out check [white|black]" << endl;
     cout << "\t" << "input board and user choice" << endl;
+    cout << "usage: ./a.out print [white|black]" << endl;
+    cout << "\t" << "just print player can put" << endl;
 }
 
 bool parse_current_player(Status &current_player, const char *argv[]) {
@@ -463,11 +465,29 @@ int main(const int argc, const char *argv[])
         else {
             Pos pos;
             input_parse(current_player, pos);
-            if (checkCanPut(pos, current_player, &current_board))
+            if (checkCanPut(pos, current_player, &current_board)) {
                 cout << "can put" << endl;
+                put(pos, current_player, &current_board);
+                display(&current_board, swap_player(current_player));
+            }
             else
                 cout << "can't put" << endl;
         }
+    } else if (string(argv[1]) == "print" && argc == 3) {
+        Status current_player;
+        if (!parse_current_player(current_player, argv)) {
+            print_help();
+            return 1;
+        }
+
+        BoardArray current_board;
+        parse_board(current_board);
+        display(&current_board, current_player);
+        if (isGameOver(&current_board))
+            print_result(current_board);
+        else if (isPass(current_player, &current_board))
+            cout << "pass" << endl;
+
     } else {
         print_help();
         return 1;
